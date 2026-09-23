@@ -14,8 +14,10 @@ I checked whether it does.
    agreed. The number reads far more certain than it is.
 4. But it put the messages in roughly the **right order**. The ones it scored
    highest really were the ones people found worst.
-5. The order is the part you can trust. The number can be corrected, and it
-   takes surprisingly little: about **150 examples you have labelled yourself**.
+5. On this data the **ordering held up far better than the number**, and the
+   number can be corrected: about **150 examples labelled here** were enough,
+   25 got most of the way. Ordering is not automatically trustworthy either,
+   which is the next section.
 
 That is the whole study. Everything in [docs/](docs/) is me showing the working.
 
@@ -29,8 +31,10 @@ flip, they are getting roughly one in four.
 **Use the number to sort things, not to decide things,** until you have checked
 it against examples from your own task.
 
-**If you need the number itself to be meaningful**, label 150 or so of your own
-cases and fit a correction. 25 got most of the way. The tools here do it.
+**If you need the number itself to be meaningful**, label some of your own cases
+and fit a correction. On this dataset around 150 corrected most of the scale
+error and 25 got most of the way, but that is a measurement here, not a recipe
+for your task. `recal_curve.py` gives you the curve for your own data.
 
 **Calibration does not travel.** A model that is well calibrated on someone
 else's benchmark can be useless on your questions. That happened to us here,
@@ -53,8 +57,9 @@ much of that a correction fixes.
 
 The two scripts worth stealing know nothing about this study:
 
-- **`recal.py`** answers "is my problem the scale or the ordering?" Scale is
-  fixable. Ordering is not.
+- **`recal.py`** answers "is my problem the scale or the ordering?" A
+  calibration can fix the scale. It cannot fix bad ordering, though a
+  different model, prompt or task framing might.
 - **`recal_curve.py`** answers "how many labelled examples would fixing it
   take?"
 
@@ -63,12 +68,12 @@ true, and point it at your own data.
 
 ## The longer version
 
-- **[docs/results.md](docs/results.md)** — every measurement, with confidence
+- **[docs/results.md](docs/results.md)**: every measurement, with confidence
   intervals, and the comparison against Claude Sonnet and the open-weights Laya.
-- **[docs/method.md](docs/method.md)** — the dataset, what each model was asked,
+- **[docs/method.md](docs/method.md)**: the dataset, what each model was asked,
   what Brier and ECE and the rest actually mean, and how to reproduce every
   table.
-- **[docs/limits.md](docs/limits.md)** — what this does not show, two claims an
+- **[docs/limits.md](docs/limits.md)**: what this does not show, two claims an
   earlier draft of mine got wrong, and one model that was tried and dropped.
 
 ## How this was made
