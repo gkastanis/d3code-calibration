@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+
+# The reproduce commands write arm outputs and dataset samples into the
+# working directory. Those carry the D3code item texts, which this repo
+# deliberately does not republish. Keep them out by default.
+*.jsonl
+!results-compact.jsonl
+sample*.json
+d3-*.csv
