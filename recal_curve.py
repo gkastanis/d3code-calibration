@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from metrics import load_arm, score  # noqa: E402
 from recal import pav, apply as apply_map  # noqa: E402
+import explain  # noqa: E402
 
 DEFAULT_SIZES = "25,50,100,150,250,500,1000,2000"
 
@@ -49,6 +50,7 @@ def main() -> int:
     print(f"{'fit items':>10} {'brier':>8} {'ece':>8} {'vs raw':>9} {'vs base':>9}")
 
     sizes = [int(s) for s in a.sizes.split(",") if int(s) < len(rows)]
+    curve: list[tuple] = []
     for n in sizes:
         briers, eces = [], []
         for seed in range(a.seeds):
@@ -63,9 +65,12 @@ def main() -> int:
             briers.append(s["brier"])
             eces.append(s["ece"])
         b, e = statistics.fmean(briers), statistics.fmean(eces)
+        curve.append((n, b, e))
         print(f"{n:>10} {b:>8.4f} {e:>8.4f} "
               f"{(1 - b / raw['brier']) * 100:>8.0f}% {(1 - b / base['brier']) * 100:>8.0f}%")
     print("\n'vs raw' and 'vs base' are percent reduction in Brier, held out.")
+    for line in explain.explain_curve(curve, raw['brier'], base['brier']):
+        print(line)
     return 0
 
 

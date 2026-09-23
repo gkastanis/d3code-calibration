@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from metrics import load_arm, score  # noqa: E402
+import explain  # noqa: E402
 
 
 def pav(xs: list[float], ys: list[float]) -> list[tuple[float, float]]:
@@ -79,7 +80,8 @@ def main() -> int:
     print(f"  before recal : brier={before['brier']:.3f} ece={before['ece']:.3f} auc={before['auc']:.3f}")
     print(f"  after  recal : brier={m(briers):.3f} ece={m(eces):.3f} auc={m(aucs):.3f}   (split-half isotonic, {a.seeds} seeds x 2 folds, held-out)")
     print(f"  base rate    : brier={base_s['brier']:.3f} ece={base_s['ece']:.3f} (constant p={base:.3f})")
-    print(f"  verdict      : {'signal beyond base rate after recal' if m(briers) < base_s['brier'] else 'no gain over base rate even after recal'}")
+    for line in explain.explain_recal(before, m(briers), m(eces), m(aucs), base_s['brier']):
+        print(line)
     return 0
 
 

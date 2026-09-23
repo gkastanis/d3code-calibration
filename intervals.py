@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from metrics import load_arm, score  # noqa: E402
+import explain  # noqa: E402
 
 METRICS = ("brier", "ece", "spearman", "auc", "acc@0.5")
 
@@ -115,6 +116,7 @@ def main() -> int:
     db = boot(ids, B, a.boots, a.seed)
     dd = boot_diff(ids, A, B, a.boots, a.seed + 1)
 
+    verdicts: list[tuple] = []
     print(f"{'metric':<10} {a.arm[:14]:>16} {a.vs[:14]:>16}   "
           f"{'difference (paired)':>26}  significant")
     for m in METRICS:
@@ -122,10 +124,13 @@ def main() -> int:
             continue
         lo, hi = pct(dd[m], .025), pct(dd[m], .975)
         sig = "yes" if (lo > 0 or hi < 0) else "no"
+        verdicts.append((m, pa[m] - pb[m], lo, hi))
         print(f"{m:<10} {pa[m]:>7.4f} [{pct(da[m], .025):.3f},{pct(da[m], .975):.3f}] "
               f"{pb[m]:>7.4f} [{pct(db[m], .025):.3f},{pct(db[m], .975):.3f}]   "
               f"{pa[m] - pb[m]:>+8.4f} [{lo:+.4f},{hi:+.4f}]  {sig}")
     print("\n'significant' means the paired 95% interval for the difference excludes zero.")
+    for line in explain.explain_intervals(verdicts, a.arm, a.vs):
+        print(line)
     return 0
 
 

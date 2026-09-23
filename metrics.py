@@ -29,6 +29,9 @@ import math
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import explain  # noqa: E402
+
 
 def rank(xs: list[float]) -> list[float]:
     order = sorted(range(len(xs)), key=lambda i: xs[i])
@@ -141,16 +144,23 @@ def report(path: Path, label: str, arm: str | None = None) -> None:
     p = [float(r["model"]["p_offensive"]) for r in rows]
     rate = [float(r["human"]["rate"]) for r in rows]
     base = sum(rate) / len(rate)
+    overall = score(p, rate)
+    base_s = score([base] * len(rate), rate)
     print(f"\n=== {label} ({path.name}) ===")
-    print("overall      ", fmt(score(p, rate)))
-    print("base-rate    ", fmt(score([base] * len(rate), rate)), f"(constant p={base:.3f})")
+    print("overall      ", fmt(overall))
+    print("base-rate    ", fmt(base_s), f"(constant p={base:.3f})")
     el = [r.get("elapsed", 0) for r in rows]
     cost = sum(float(r.get("cost_usd", 0) or 0) for r in rows)
     print(f"latency: mean {sum(el)/len(el):.2f}s  median {sorted(el)[len(el)//2]:.2f}s   cost: ${cost:.3f} total, ${cost/len(rows):.4f}/item"
           if cost else f"latency: mean {sum(el)/len(el):.2f}s  median {sorted(el)[len(el)//2]:.2f}s   cost: not reported by this arm")
     print("calibration (bin, n, mean p, mean human rate):")
-    for b, n, mp, mr in calibration_table(p, rate):
+    table = calibration_table(p, rate)
+    for b, n, mp, mr in table:
         print(f"   {b}  n={n:<4} p={mp:.2f}  human={mr:.2f}  gap={mp-mr:+.2f}")
+    print()
+    for line in explain.explain_scores(overall, base_s, base, table, label):
+        print(line)
+    print()
     # per category
     cats = sorted({r["category"] for r in rows})
     for c in cats:

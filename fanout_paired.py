@@ -21,7 +21,9 @@ import statistics
 import sys
 from pathlib import Path
 
-from metrics import load_arm, score
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from metrics import load_arm, score  # noqa: E402
+import explain  # noqa: E402
 
 
 def main() -> int:
@@ -64,6 +66,8 @@ def main() -> int:
     print(f"  moved more than 0.10 {sum(1 for x in d if x > 0.10)}")
     flips = sum(1 for x, z in zip(pf, ps) if (x >= 0.5) != (z >= 0.5))
     print(f"  crossed the 0.5 line {flips}")
+    mean_change = statistics.fmean(d)
+    rerun_noise = None
 
     if a.repeat:
         reps = [load_arm(path, a.repeat_arm[i] if a.repeat_arm else None)
@@ -81,6 +85,10 @@ def main() -> int:
         print(f"  identical            {sum(1 for x in noise if x == 0)} of {len(noise)}")
         print(f"  mean |change|        {statistics.fmean(noise):.4f}")
         print(f"  max |change|         {max(noise):.4f}")
+        rerun_noise = statistics.fmean(noise)
+
+    for line in explain.explain_fanout(mean_change, flips, len(shared), rerun_noise):
+        print(line)
     return 0
 
 

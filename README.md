@@ -52,8 +52,23 @@ python3 metrics.py results-compact.jsonl --arm jev-full  --label jev
 python3 recal.py   results-compact.jsonl --arm jev-full
 ```
 
-The first prints how far the raw numbers were from reality. The second shows how
-much of that a correction fixes.
+Every script prints its tables and then says, in words, what they mean. The end
+of the first one reads:
+
+```
+What this says about jev-full, in plain words:
+  When it answered about 0.85, the real answer was yes 45% of the time (791 items).
+  It sounds more certain than it is.
+  Ordering: take one item that really was a yes and one that really was a no. It
+  scores the yes higher 86% of the time. That is a strong ordering.
+  Its raw numbers are WORSE than ignoring the model and always answering 0.34
+  (error 0.098 against 0.035).
+  Verdict: use it to RANK, not to threshold. The ordering carries signal and the
+  number does not mean what it says. Run recal.py to see how much a correction fixes.
+```
+
+Those sentences are computed from your data, not written in advance, so they
+follow the numbers when you point the scripts at something else.
 
 The two scripts worth stealing know nothing about this study:
 
