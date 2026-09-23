@@ -76,6 +76,42 @@ true, and point it at your own data.
 - **[docs/limits.md](docs/limits.md)**: what this does not show, two claims an
   earlier draft of mine got wrong, and one model that was tried and dropped.
 
+## Other people found the same thing
+
+This is not a lone result, and the agreement is worth more than my numbers alone.
+
+**[Laya](https://github.com/NandhaKishorM/laya)**, one of the two models measured
+here, says it about itself in its own README:
+
+> Both checkpoints are over-confident as shipped. Refitting one temperature per
+> (question type, option count) on held-out data moves mean ECE 0.466 -> 0.081
+
+**[AnyJev](https://github.com/nokia-applied-research/AnyJev)** (Nokia Applied
+Research and Tencent Hunyuan, Apache-2.0) turns any open LLM into a decision
+model by reading the probability out of the next-token distribution. Its README:
+
+> Raw logits change their answer when you reorder the options, and their
+> confidence cannot be trusted; AnyJev fixes the first with zero labels and the
+> second with a few hundred.
+
+It reports calibration error of 0.240 raw, falling to 0.095 with 100 to 500
+labels per question.
+
+Beside this study: Jev's raw calibration error here was 0.251, and the correction
+needed around 150 labels before the curve flattened. Three separate efforts,
+different models and tasks, and the same finding each time. The ordering carries
+real signal, the probability attached to it does not, and a few hundred labels
+repair it.
+
+Those numbers are not directly comparable. Different models, different tasks,
+and different corrections: AnyJev scales a temperature, this study fits an
+isotonic map. Read them as three arrows pointing the same way, not as a league
+table.
+
+What was built differs too. AnyJev is the repair, and it needs a model whose
+internals you can read. This repository is the check, and it works on anything
+with an API, including closed models like Jev.
+
 ## How this was made
 
 The measurements are real: every number here comes from a run that is
