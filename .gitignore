@@ -8,3 +8,8 @@ __pycache__/
 !results-compact.jsonl
 sample*.json
 d3-*.csv
+
+# local tooling, not part of the study
+.serena/
+.idea/
+.vscode/

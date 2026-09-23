@@ -1,31 +1,59 @@
 # Does that probability mean anything?
 
-A model hands you 0.85. Is the answer yes about 85% of the time, or is 0.85 just
-a number that sorts above 0.84?
+A model says 0.85. Does that mean yes about 85% of the time, or only that this
+item ranks above one scored 0.84?
 
-This repository is two things. Mostly it is **a small stdlib-only tool for
-answering that question about any model, on your own data**. It is also the
-worked example that produced it: TypeSafe's Jev and the open-weights Laya,
-measured against 150,000 human ratings.
+On this dataset it meant neither. When TypeSafe's Jev reported about 0.85, the
+mean human agreement rate in that bin was 0.45. A threshold of 0.5 therefore did
+not mean "most people agree". The ordering was good and the scale was wrong.
 
-The tool asks two questions your accuracy number cannot:
+That is the repairable kind of wrong, and the repair is cheap. A held-out
+isotonic recalibration took Jev's Brier score from 0.098 to 0.017. Twenty-five
+labelled examples removed 77% of the raw error, and 150 came within 6% of what
+2,000 gave. What no recalibration can repair is the ordering, because a monotone
+map never swaps two items. So on these 4,554 items Jev, which ranked better than
+the open-weights Laya but was badly scaled, ends up ahead after the repair: Laya
+started closer, at 0.023, and the same fit moved it only to 0.022.
 
-- **Is the problem the scale or the ranking?** A model can order your items
-  correctly and still report absurd probabilities. That is repairable. A model
-  that orders them wrongly is not: no relabelling of the numbers can reorder
-  them. `recal.py` tells you which one you have.
-- **How many labelled examples would the repair take?** `recal_curve.py` gives
-  you the curve rather than a shrug. Here, 25 examples removed 77% of the error
-  and 150 got within 6% of what 2,000 gave.
+All of that describes this dataset. It says nothing about either model on your
+task, which is why the tools are here alongside the study. Give `recal.py` and
+`recal_curve.py` a list of pairs, what your model said and what turned out to be
+true, and they will tell you whether your problem is the scale or the ordering,
+and roughly how many labels the repair would take. Neither script knows anything
+about Jev, Laya, D3code or offensiveness.
 
-Feed either script a list of *(what the model said, what was actually true)*
-pairs and it answers. Nothing in them is specific to these models, this dataset,
-or this task.
+## What to do with a probability in an application
 
-## Install and run
+Use the model's number to rank candidates only after checking that it orders your own labelled items usefully. Choose a pass/fail threshold from those items. If the number must mean "about this fraction of cases are yes", fit a calibration map on separate labelled items and check it on held-out items. A published calibration score, including one in this README, does not set a threshold for a new task.
 
-Python 3.10 or newer. The scoring path is standard library only, so the included
-results can be checked with no API key, no model download and no pip install:
+For our `semantic_yes` rubric, the practical observations are these:
+
+- Use the number as a **ranker**, and set the threshold from labelled data, not
+  from 0.5. On D3code the crowd-majority boundary sits near Jev p = 0.9, not 0.5.
+- If the rubric needs a probability that means what it says, put a calibration
+  map in front of it. Measured: 150 labelled items remove 81 percent of the raw
+  Brier error and land within 6 percent of what 2,000 items give. See
+  `recal_curve.py`.
+- The per-region result says: do not expect Jev to answer "for whom" questions
+  differently from the global one.
+- **The rubric check emits a Jev-shaped question and nothing checks that the
+  provider implements it.** Sending `criteria` on a `noul` degrades Laya badly
+  and silently. Any grader that swaps providers behind the `asker` seam
+  needs each provider to declare which keys it honours, and to fold or fail on
+  the rest, rather than degrade quietly. This is the one concrete code change
+  this study asks for.
+- **Before swapping the provider, re-run the fixtures.** The `asker` argument
+  makes the swap a one-liner, which is exactly why it needs a gate. A provider
+  is qualified per eval set, not once.
+- A spread check is cheap insurance in the grader: if every `semantic_yes` in a
+  run lands inside a narrow band, either the model has no opinion about this
+  rubric or it is not receiving the whole question. Either way the pass rate is
+  meaningless. That check would have caught the bug above in one run. Not
+  implemented yet.
+
+## Run the shipped checks
+
+Python 3.10 or newer. The scoring path uses the standard library. The included results need no API key, model download or pip install:
 
 ```bash
 python3 metrics.py  results-compact.jsonl --arm jev-full  --label jev
@@ -34,35 +62,21 @@ python3 recal.py    results-compact.jsonl --arm jev-full
 python3 intervals.py results-compact.jsonl --arm jev-full --vs laya-full
 ```
 
-`results-compact.jsonl` holds every row of every arm, keyed by an `arm` field,
-with the item texts removed. Every table below is reproducible from it; the
-exact commands are under [Reproduce](#reproduce). Running a model fresh needs
-more: `pip install laya` for the local Laya arm, a TypeSafe API key for Jev, the
-`claude` CLI for the Sonnet arm, and the original D3code download for the item
-texts this repository does not republish.
+`results-compact.jsonl` contains every row of every arm, identified by an `arm` field, with the item texts removed. The complete commands are under [Reproduce](#reproduce). Running models afresh requires `pip install laya` for the local Laya arm, a TypeSafe API key for Jev, the `claude` CLI for Sonnet, and the original D3code download for item texts.
 
-## The worked example
+## How to read the measures
 
-Jev returns a probability for a yes/no question instead of text, and the pitch
-is that the number is calibrated. The question this study started from was
-narrow and practical: an eval rubric of ours thresholds on that number, so when
-Jev says 0.8, is the answer yes about 80% of the time?
+A `noul` is a typed yes/no question whose answer is a probability. Here the target is the fraction of human raters who answered yes for each item. **Brier** is average squared error between that fraction and the model probability; lower is better. **ECE** groups probabilities into bins and averages the gaps between each bin's mean prediction and mean observed rate; lower is better. The constant base-rate predictor has ECE 0.000 by construction, even though it cannot distinguish items.
 
-Our own repository could not answer it. Five traces, eight labels. D3code can.
+**Spearman** measures how well two sets of values rank the same items. **AUC** measures how often a positive item ranks above a negative item, here using the crowd-majority label. Higher is better for both. Neither says that a probability such as 0.8 means 80%.
 
-**Short answer.** No, and the shape of the miss matters more than the fact of
-it. Jev's probability is over-confident in one direction, toward yes. It ranks
-items well and its scale is wrong, repairably. Laya, the open-weights
-alternative, is near-perfectly scaled here with no repair at all but ranks
-worse, so after the repair Jev is ahead again. **Scale is cheap to fix and rank
-is not.** A published calibration number licenses nothing about your data.
+A **paired bootstrap** repeatedly resamples the same item ids for both models. Its displayed intervals show the uncertainty of their difference on this sample. **Isotonic recalibration** fits a non-decreasing map from reported probability to human rate. It can change the scale without reversing the model's order. The recalibration results below score items held out from each fit.
 
-A second lesson came out of getting this wrong in a draft that was nearly
-published: we first measured Laya through a question shape it does not
-implement, and read the resulting flat answers as "this model has no signal".
-See [The finding](#the-finding).
+## Study design
 
-## Ground truth
+Jev returns a probability for a yes/no question rather than text, with calibration among its advertised properties. Our eval rubric thresholds that number. Our own repository had only five traces and eight labels, so we used D3code to ask whether a reported probability tracks human agreement.
+
+### Human ratings
 
 [D3code](https://github.com/google-research-datasets/D3code) (Google Research,
 CC-BY 4.0): 4,590 short online messages from the Jigsaw corpus, each rated for
@@ -75,7 +89,7 @@ calibrated probability should track.
 34 item ids appear twice in the items file; metrics keep the first scored row per
 id, leaving 4,554 items.
 
-## Arms
+### Model arms and protocols
 
 | Arm | What was asked | Items | Latency | Cost |
 |---|---|---|---|---|
@@ -91,9 +105,21 @@ imports the Jev arm's question builder so the two models are asked exactly the
 same thing. All arms were told the 0-4 scale and that "offensive" means 2 or
 more.
 
-## Results
+## Main result: recalibration changes the comparison
 
-### Overall, full dataset (n = 4,554, both models on every item)
+The fit was a monotone isotonic map from model probability to human rate, trained on half the items and applied to the other half. Results use 20 seeds x 2 folds; every figure in this table is held out.
+
+| Arm | Brier before | Brier after | ECE after | AUC after | Base rate Brier |
+|---|---|---|---|---|---|
+| Jev, full 4,554 | 0.098 | **0.017** | 0.008 | 0.857 | 0.035 |
+| Laya, full 4,554 | 0.023 | 0.022 | 0.008 | 0.797 | 0.035 |
+| Jev, the 100 | 0.104 | 0.019 | 0.045 | 0.822 | 0.029 |
+| Laya, the 100 | 0.021 | 0.023 | 0.043 | 0.827 | 0.029 |
+| Sonnet, the 100 | 0.037 | 0.023 | 0.044 | 0.773 | 0.029 |
+
+Laya's full-set Brier score barely changes because its raw scale is already close to the human rate here. On the 100-item subset, the fit slightly worsens it after learning from 50 items. Jev moves from the worst raw Brier score to the best recalibrated one: 0.017 against Laya's 0.022 on the full set. That result depends on actually fitting a map to relevant labelled data. A monotone map cannot reorder items.
+
+### Raw probabilities on the full dataset (n = 4,554, both models on every item)
 
 | Metric | Jev raw | Laya raw | Base rate |
 |---|---|---|---|
@@ -106,7 +132,7 @@ more.
 The two split cleanly: **Jev ranks better, Laya is scaled better.** Jev is the
 only arm whose raw probability loses to a constant.
 
-At this sample size every one of those gaps is real. Paired bootstrap, 400
+The displayed paired intervals for all five differences exclude zero. Paired bootstrap, 400
 resamples of the 4,554 shared items, scoring both arms on the same resample
 (`intervals.py --arm jev-full --vs laya-full`):
 
@@ -117,9 +143,6 @@ resamples of the 4,554 shared items, scoring both arms on the same resample
 | Spearman | 0.695 to 0.725 | 0.602 to 0.641 | +0.088 (+0.069, +0.108) | yes |
 | AUC | 0.844 to 0.870 | 0.784 to 0.812 | +0.061 (+0.046, +0.076) | yes |
 | Accuracy at 0.5 | 0.544 to 0.571 | 0.786 to 0.809 | -0.240 (-0.260, -0.223) | yes |
-
-The 100-item tables below are a different story, and the intervals there are the
-reason to read them carefully rather than as a ranking.
 
 Calibration curve, raw:
 
@@ -136,71 +159,11 @@ Calibration curve, raw:
 | 0.8-0.9 | 791 | 0.85 | 0.45 | +0.39 |
 | 0.9-1.0 | 540 | 0.93 | 0.58 | +0.35 |
 
-Reading: below 0.2 the number is honest. Above 0.5 it is not. When Jev says 0.85,
+In these bins, the predictions below 0.2 are close to the mean human rates. Above 0.5 the gaps are large. When Jev says 0.85,
 45% of people agreed. It ranks well and reads strict: the number behaves like
 one severe rater, not like the average of 24.
 
-### Head to head on the same 100 items
-
-| Metric | Jev raw | Sonnet raw | Laya raw | Base rate |
-|---|---|---|---|---|
-| Brier vs rate | 0.104 | 0.037 | **0.021** | 0.029 |
-| ECE | 0.262 | 0.115 | **0.035** | 0.000 |
-| Spearman | 0.608 | 0.573 | 0.576 | n/a |
-| AUC | 0.836 | 0.799 | 0.841 | 0.500 |
-| Latency | 0.70 s | 5.70 s | 5.71 s (CPU) | |
-
-Sonnet is closer to the crowd's scale than Jev. Laya is closer than either, and
-is the only arm whose raw probability beats a constant base rate. Of the two
-paid arms, neither raw number does.
-
-**Do not read the Spearman and AUC rows as a ranking of these three models.** At
-100 items they are noise. Paired bootstrap, 2,000 resamples
-(`intervals.py --arm jev-100 --vs sonnet-100`, and the same against
-`laya-100`):
-
-| Difference on the 100 | Jev minus Sonnet | Jev minus Laya |
-|---|---|---|
-| Brier | +0.067 (+0.050, +0.088) **real** | +0.083 (+0.062, +0.106) **real** |
-| ECE | +0.146 (+0.116, +0.178) **real** | +0.227 (+0.178, +0.265) **real** |
-| Spearman | +0.036 (-0.095, +0.158) noise | +0.032 (-0.112, +0.173) noise |
-| AUC | +0.037 (-0.045, +0.126) noise | -0.005 (-0.120, +0.109) noise |
-| Accuracy at 0.5 | -0.180 (-0.280, -0.080) **real** | -0.300 (-0.440, -0.170) **real** |
-
-So on 100 items the *calibration* differences are solid and the *ranking*
-differences are not distinguishable from zero. Jev's ranking advantage is real,
-but it takes the full 4,554 items to see it. Jev's individual AUC interval here
-is 0.742 to 0.913, which is most of the useful range.
-
-This is the ordinary arithmetic of small samples, and it is worth stating
-plainly in a study whose subject is numbers that look more certain than they
-are.
-
-### Is it the scale or the ranking? Split-half recalibration
-
-Fit a monotone (isotonic) map from model p to human rate on half the items, apply
-to the other half, 20 seeds x 2 folds, all figures held-out.
-
-| Arm | Brier before | Brier after | ECE after | AUC after | Base rate Brier |
-|---|---|---|---|---|---|
-| Jev, full 4,554 | 0.098 | **0.017** | 0.008 | 0.857 | 0.035 |
-| Laya, full 4,554 | 0.023 | 0.022 | 0.008 | 0.797 | 0.035 |
-| Jev, the 100 | 0.104 | 0.019 | 0.045 | 0.822 | 0.029 |
-| Laya, the 100 | 0.021 | 0.023 | 0.043 | 0.827 | 0.029 |
-| Sonnet, the 100 | 0.037 | 0.023 | 0.044 | 0.773 | 0.029 |
-
-This is the study's sharpest result. Laya barely moves, because there was
-nothing wrong with its scale; on the 100 the fit costs it slightly, having
-learned noise from 50 items. Jev moves from worst to best, and **recalibrated
-Jev (0.017) beats recalibrated Laya (0.022)**.
-
-Scale is repairable. Ranking is not repairable at all: no monotone map can
-reorder items. So the model with the better ranking and the broken scale is the
-better buy, provided you actually do the repair. The danger is that the broken
-scale is invisible if you never measure it, and 0.85 looks like a fine number to
-threshold at.
-
-### How many labelled examples the repair needs
+### How much labelled data did the repair need here?
 
 `recal_curve.py` fits the isotonic map on n random items and scores the rest, 40
 seeds per size. Everything below is held out of the fit (Jev, n = 4,554; raw
@@ -226,7 +189,42 @@ Caveat: this is 150 items drawn from the same 4,554. A labelled set gathered
 some other way, or drifting away from the items it was fitted on, will not do as
 well.
 
-### Does the fan-out change the number?
+### The 100-item comparison supports calibration, not ranking
+
+| Metric | Jev raw | Sonnet raw | Laya raw | Base rate |
+|---|---|---|---|---|
+| Brier vs rate | 0.104 | 0.037 | **0.021** | 0.029 |
+| ECE | 0.262 | 0.115 | **0.035** | 0.000 |
+| Spearman | 0.608 | 0.573 | 0.576 | n/a |
+| AUC | 0.836 | 0.799 | 0.841 | 0.500 |
+| Latency | 0.70 s | 5.70 s | 5.71 s (CPU) | |
+
+Sonnet is closer to the crowd's scale than Jev. Laya is closer than either, and
+is the only arm whose raw probability beats a constant base rate. Of the two
+paid arms, neither raw number does.
+
+**The Spearman and AUC differences on these 100 items do not distinguish the three models.** Paired bootstrap, 2,000 resamples
+(`intervals.py --arm jev-100 --vs sonnet-100`, and the same against
+`laya-100`):
+
+| Difference on the 100 | Jev minus Sonnet | Jev minus Laya |
+|---|---|---|
+| Brier | +0.067 (+0.050, +0.088) **real** | +0.083 (+0.062, +0.106) **real** |
+| ECE | +0.146 (+0.116, +0.178) **real** | +0.227 (+0.178, +0.265) **real** |
+| Spearman | +0.036 (-0.095, +0.158) noise | +0.032 (-0.112, +0.173) noise |
+| AUC | +0.037 (-0.045, +0.126) noise | -0.005 (-0.120, +0.109) noise |
+| Accuracy at 0.5 | -0.180 (-0.280, -0.080) **real** | -0.300 (-0.440, -0.170) **real** |
+
+So on 100 items the *calibration* differences are solid and the *ranking*
+differences are not distinguishable from zero. Jev's ranking advantage is real,
+but it takes the full 4,554 items to see it. Jev's individual AUC interval here
+is 0.742 to 0.913, which is most of the useful range.
+
+The narrower calibration claims and the uncertain ranking claims need to stay separate.
+
+## Supporting checks
+
+### Fan-out changes little on the paired Jev sample
 
 Paired: the same 300 items asked both ways, one question per call versus nine
 nouls plus a score in a single call.
@@ -249,7 +247,7 @@ call" is the capability that distinguishes a decision operation type from plain
 text classification. On this evidence the win is latency and cost, not better
 answers.
 
-### Run-to-run stability
+### Repeated calls vary
 
 | Arm | Items x runs | Identical answers | mean abs change in p | max |
 |---|---|---|---|---|
@@ -258,7 +256,7 @@ answers.
 
 Neither is deterministic. Jev moves about a third as much.
 
-### Per region (weak)
+### Region-specific answers vary little
 
 Region-specific questions ("would a typical reader living in the Sinosphere find
 this offensive?") barely move with the region. Mean Jev p per region ranges 0.49
@@ -267,12 +265,12 @@ model versus by humans gives Spearman 0.357. Caveat: about three raters per
 region per item, so item-level regional truth is noisy, though the aggregate over
 4,500 items is not.
 
-### Severity
+### Severity scores sit high
 
 Jev's 0-4 score correlates with the mean raw rating at Spearman 0.737 but sits
 high: mean 1.82 versus 1.19.
 
-### By item category
+### Social-group items are harder
 
 | Category | n | Jev AUC | Jev ECE |
 |---|---|---|---|
@@ -282,7 +280,7 @@ high: mean 1.82 versus 1.19.
 
 Hardest where humans disagree most: messages about social groups.
 
-## The second arm: Laya, and what "calibrated" actually means
+## Laya is better calibrated on D3code
 
 [Laya](https://github.com/NandhaKishorM/laya) (Apache-2.0) is an open-weights
 System 1 engine: ModernBERT-large 421M or mmBERT-base 322M, non-autoregressive,
@@ -295,8 +293,9 @@ study measured on Jev:
 > Both checkpoints are over-confident as shipped. Refitting one temperature per
 > (question type, option count) on held-out data moves mean ECE 0.466 -> 0.081
 
-On D3code it is the best-calibrated arm by a wide margin and needs no repair.
-Its calibration curve is nearly the diagonal:
+On D3code it has the lowest raw ECE of the model arms and needs little repair.
+
+Its calibration curve is close to the diagonal:
 
 | Laya p bin | n | mean p | mean human rate | gap |
 |---|---|---|---|---|
@@ -310,11 +309,11 @@ Its calibration curve is nearly the diagonal:
 | 0.7-0.8 | 48 | 0.74 | 0.60 | +0.14 |
 | 0.8-0.9 | 10 | 0.82 | 0.62 | +0.20 |
 
-Compare the Jev table above, where the same bins run +0.31, +0.37, +0.39. Laya
-is also cautious: only 58 of 4,554 items clear p = 0.7 and none clears 0.9,
-while human agreement runs all the way to 1.0 (19 items sit at 0.875 or above).
+The same bins in the Jev table run +0.31, +0.37 and +0.39. Laya is also
+cautious: only 58 of 4,554 items clear p = 0.7 and none clears 0.9, while human
+agreement runs all the way to 1.0 (19 items sit at 0.875 or above).
 
-### Then we asked it our own questions, and it fell over
+## A separate Drupal probe exposed a question-format mismatch
 
 > **The numbers in this section come from a separate experiment that is not in
 > this repository**, and cannot be reproduced from `results-compact.jsonl`. They
@@ -322,7 +321,7 @@ while human agreement runs all the way to 1.0 (19 items sit at 0.875 or above).
 > hedged. The probe runs against the `semantic_yes` rubric check in
 > [drupal/ai_best_practices](https://www.drupal.org/project/ai_best_practices),
 > its Drupal-specific rubrics and its fixtures, none of which belong in a study
-> of D3code. Everything else in this README is reproducible here.
+> of D3code. The D3code results in this README are reproducible here. The Needle smoke scripts were not kept.
 
 The probe runs Laya through the `semantic_yes` fixtures and paraphrase probes
 from that sibling experiment (Drupal GitLab answers: "does this response explain
@@ -359,27 +358,10 @@ Folded in, Laya discriminates. So the fair comparison, on the thirteen:
 | paraphrase probes wrong | **0 of 7** | 3 of 7 | 4 of 7 |
 | all thirteen wrong | **0 of 13** | 4 of 13 | n/a |
 
-Jev is still clearly better on our questions. Laya is no longer useless on them,
+Jev made fewer errors on these thirteen questions. Laya is no longer useless on them,
 and the original "soft yes to everything" reading was an artifact.
 
-### The finding
-
-Two things, and the second one nearly ate the first.
-
-**1. Rank and scale are different properties, and only one is repairable.** On
-D3code Jev ranks better and is badly scaled; Laya is well scaled and ranks
-worse. A monotone map fixes a scale from about 150 labelled examples and cannot
-reorder anything, so recalibrated Jev (Brier 0.017) beats recalibrated Laya
-(0.022). A published ECE, including every one in this README, licenses nothing
-about your data: measure on your own items before you pick a threshold.
-
-**2. A silent provider mismatch looks exactly like a bad model.** The rubric
-check emits Jev's documented shape. Laya accepts the same call, and
-something about the extra key collapses its answers into a 0.19-wide band that
-reads as "this model has no idea". No error, no warning. It took a direct
-challenge to go and check, and a second one to establish that the key is not
-simply dropped. Anyone benchmarking two providers through one harness is one
-undocumented key away from publishing a verdict about the wrong thing.
+### Corrections to the earlier draft
 
 Two claims an earlier draft of this section made that did not survive checking,
 recorded so they do not get repeated:
@@ -398,32 +380,7 @@ our rubrics ask a question *about* a response), input length (one sentence
 versus a whole markdown answer), or checkpoint (`laya_arm.py` takes
 `--checkpoint`; only the router default was run).
 
-## What this means for `semantic_yes`
-
-- Use the number as a **ranker**, and set the threshold from labelled data, not
-  from 0.5. On D3code the crowd-majority boundary sits near Jev p = 0.9, not 0.5.
-- If the rubric needs a probability that means what it says, put a calibration
-  map in front of it. Measured: 150 labelled items remove 81 percent of the raw
-  Brier error and land within 6 percent of what 2,000 items give. See
-  `recal_curve.py`.
-- The per-region result says: do not expect Jev to answer "for whom" questions
-  differently from the global one.
-- **The rubric check emits a Jev-shaped question and nothing checks that the
-  provider implements it.** Sending `criteria` on a `noul` degrades Laya badly
-  and silently. Any grader that swaps providers behind the `asker` seam
-  needs each provider to declare which keys it honours, and to fold or fail on
-  the rest, rather than degrade quietly. This is the one concrete code change
-  this study asks for.
-- **Before swapping the provider, re-run the fixtures.** The `asker` argument
-  makes the swap a one-liner, which is exactly why it needs a gate. A provider
-  is qualified per eval set, not once.
-- A spread check is cheap insurance in the grader: if every `semantic_yes` in a
-  run lands inside a narrow band, either the model has no opinion about this
-  rubric or it is not receiving the whole question. Either way the pass rate is
-  meaningless. That check would have caught the bug above in one run. Not
-  implemented yet.
-
-## Caveats
+## Limits of the study
 
 - One dataset, one domain (offensiveness), English. The over-confidence pattern
   may not transfer to "does this Drupal answer make the point" questions; there
@@ -446,7 +403,7 @@ versus a whole markdown answer), or checkpoint (`laya_arm.py` takes
   them and keeps only ids, human rates and model outputs. Re-fetch texts from
   D3code by `item_id`.
 
-## Tried and dropped: Needle (Cactus Compute)
+## Appendix: why Needle was not an arm
 
 Needle 3 (`cactus-needle` 3.0.2, Apache-2.0) is an 8-29 MB on-device model
 for tool calls and structured extraction that advertises "a calibrated
@@ -471,10 +428,9 @@ from a calibrated judgment. No arm was run.
 
 ## Reproduce
 
-### Every table above, from the shipped results
+### D3code results from the shipped file
 
-No keys, no downloads, no pip install. Each command prints the table it is
-named after.
+No keys, no downloads, no pip install. These commands reproduce the D3code result tables and checks named below. The separate Drupal probe above is not in the shipped file.
 
 ```bash
 R=results-compact.jsonl
@@ -556,7 +512,7 @@ headers make. `systemone.py` is derived from `evals/semantic.py` in
 same licence, with the rubric-facing half removed.
 
 The [D3code dataset](https://github.com/google-research-datasets/D3code), linked
-under "Ground truth", is by Google Research and licensed CC-BY 4.0. Its item
+under "Human ratings", is by Google Research and licensed CC-BY 4.0. Its item
 texts are deliberately not republished here: `results-compact.jsonl` carries
 only item ids, human agreement rates and model outputs. Re-fetch the texts from
 D3code by `item_id` if you need them.
