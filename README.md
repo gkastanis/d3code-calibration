@@ -123,6 +123,22 @@ and different corrections: AnyJev scales a temperature, this study fits an
 isotonic map. Read them as three arrows pointing the same way, not as a league
 table.
 
+Five people also benchmarked Jev's calibration in its first two weeks, each
+against one gold label per item, and the picture is task-dependent:
+[Mike Moore](https://github.com/themsquared/jev-benchmark) (60 tool-call risk
+cases, ECE 0.05 to 0.07, "on this task set, the calibration claim holds"),
+[Dhruv Mehra](https://github.com/dhruvmehra/jevbench) (500 items each on
+SST-2, AG News, Banking77: ECE 0.026, 0.112, 0.125),
+[instax-dutta](https://github.com/instax-dutta/sysone-bench) (310 items, ECE
+0.03 to 0.06), [AbdelStark](https://github.com/AbdelStark/jev-benchmarks)
+(300 items, "substantially worse calibrated" on DAIR Emotion),
+[Pavel Ravvich](https://github.com/PavelRavvich/jev-bench) (1,000 items, "On
+Banking77 Jev's ECE is the worst of the three on the shared subset"). What this
+repository adds is the other kind of label: about 24 people per item, so the
+probability is scored against how many of them agreed, not against one
+verdict. That is the number a threshold actually needs, and it is where 0.85
+turned out to mean 45%.
+
 What was built differs too. AnyJev is the repair, and it needs a model whose
 internals you can read. This repository is the check, and it works on anything
 with an API, including closed models like Jev.
