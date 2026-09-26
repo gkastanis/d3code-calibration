@@ -12,8 +12,9 @@ I checked whether it does.
 2. I asked two of these models the same question about every message.
 3. When TypeSafe's Jev answered `0.85`, about **45%** of people had actually
    agreed. The number reads far more certain than it is.
-4. But it put the messages in roughly the **right order**. The ones it scored
-   highest really were the ones people found worst.
+4. But it put the messages in roughly the **right order**. Higher scores
+   generally separated the messages most people called offensive from the
+   ones most did not.
 5. On this data the **ordering held up far better than the number**, and the
    number can be corrected: about **150 examples labelled here** were enough,
    25 got most of the way. Ordering is not automatically trustworthy either,
@@ -25,8 +26,9 @@ That is the whole study. Everything in [docs/](docs/) is me showing the working.
 
 **Do not ship `0.5` as a threshold as though it means "more likely than not".**
 On this data, the point where most people actually agreed sat near `0.9`, not
-`0.5`. A site owner who types 0.5 into a settings form is not getting a coin
-flip, they are getting roughly one in four.
+`0.5`. On this dataset, items scored around 0.5 had an average agreement rate
+of roughly one in four, so a site owner who types 0.5 into a settings form is
+not getting a coin flip.
 
 **Use the number to sort things, not to decide things,** until you have checked
 it against examples from your own task.
@@ -36,8 +38,8 @@ and fit a correction. On this dataset around 150 corrected most of the scale
 error and 25 got most of the way, but that is a measurement here, not a recipe
 for your task. `recal_curve.py` gives you the curve for your own data.
 
-**Calibration does not travel.** A model that is well calibrated on someone
-else's benchmark can be useless on your questions. That happened to us here,
+**Calibration is not guaranteed to transfer.** A model that is well calibrated
+on someone else's benchmark can be useless on your questions. That happened to us here,
 and it is written up in [limits.md](docs/limits.md).
 
 ## Check it yourself
@@ -91,9 +93,10 @@ true, and point it at your own data.
 - **[docs/limits.md](docs/limits.md)**: what this does not show, two claims an
   earlier draft of mine got wrong, and one model that was tried and dropped.
 
-## Other people found the same thing
+## Other calibration results
 
-This is not a lone result, and the agreement is worth more than my numbers alone.
+Other reports show that calibration varies across tasks and evaluation setups.
+The ones below were read in full; the quotations are verbatim.
 
 **[Laya](https://github.com/NandhaKishorM/laya)**, one of the two models measured
 here, says it about itself in its own README:
@@ -113,10 +116,9 @@ It reports calibration error of 0.240 raw, falling to 0.095 with 100 to 500
 labels per question.
 
 Beside this study: Jev's raw calibration error here was 0.251, and the correction
-needed around 150 labels before the curve flattened. Three separate efforts,
-different models and tasks, and the same finding each time. The ordering carries
-real signal, the probability attached to it does not, and a few hundred labels
-repair it.
+needed around 150 labels before the curve flattened. These three reports (Laya,
+AnyJev, this study) describe calibration improvements using labelled data, with
+different models, tasks and corrections.
 
 Those numbers are not directly comparable. Different models, different tasks,
 and different corrections: AnyJev scales a temperature, this study fits an
@@ -133,21 +135,45 @@ SST-2, AG News, Banking77: ECE 0.026, 0.112, 0.125),
 0.03 to 0.06), [AbdelStark](https://github.com/AbdelStark/jev-benchmarks)
 (300 items, "substantially worse calibrated" on DAIR Emotion),
 [Pavel Ravvich](https://github.com/PavelRavvich/jev-bench) (1,000 items, "On
-Banking77 Jev's ECE is the worst of the three on the shared subset"). What this
-repository adds is the other kind of label: about 24 people per item, so the
-probability is scored against how many of them agreed, not against one
-verdict. That is the number a threshold actually needs, and it is where 0.85
-turned out to mean 45%.
+Banking77 Jev's ECE is the worst of the three on the shared subset").
 
-What was built differs too. AnyJev is the repair, and it needs a model whose
-internals you can read. This repository is the check, and it works on anything
-with an API, including closed models like Jev.
+Two more address related questions and reach different practical conclusions.
+[Alex Molas](https://www.alexmolas.com/2026/09/23/jev-cant-be-calibrated.html)
+argues that calibration need not transfer between data distributions, and
+cites reported failures without presenting a new benchmark: "A model can be
+calibrated on TypeSafe's data and still be miscalibrated on yours", so "treat
+Jev's outputs as good scores (they rank examples well) rather than good
+probabilities" and refit on a few hundred labelled examples.
+[Leonard Grazian](https://leonardgrazian.com/blog/jev-calibration/) responds
+with results on two datasets. Like this study, he evaluates against annotator
+vote shares rather than a single gold label, although the task and annotator
+population differ: after prompt tuning on labelled examples, ECE 0.025 against
+100-rater vote shares on 612 held-out ChaosNLI stories, and 0.027 against
+binary labels on 3,066 WiC examples. He reports no untuned calibration
+baseline. His warning, "Without tuning, the Jev probability will have no
+bearing on your ground truth", is about aligning the question with the labels;
+his experiment does not measure how much tuning changed calibration.
+
+Side by side: Grazian reports low calibration error after prompt tuning. This
+study reports high error with its original prompt (items scored around 0.85
+averaged about 45% human agreement) and low held-out error after
+recalibration (an isotonic map fitted on half the items took ECE from 0.251 to
+0.008 on the other half). Without an untuned baseline from Grazian, nobody can
+tell whether tuning explains the difference. What both show is that a
+threshold should be checked against the intended task and population before
+anyone relies on it; neither shows that every untuned prompt is miscalibrated,
+or that every threshold after correction is safe.
+
+What was built differs too. AnyJev is a model-level approach and needs a model
+whose internals you can read. This repository provides the calibration check
+and a score recalibration from model outputs and labels, and it works on
+anything with an API, including closed models like Jev.
 
 ## How this was made
 
-The measurements are real: every number here comes from a run that is
-reproducible from the shipped results file, and the commands are in
-[method.md](docs/method.md).
+The measurements are real: this study's results are reproducible from the
+shipped results file with the commands in [method.md](docs/method.md).
+External results are attributed to their sources and were not rerun here.
 
 The work was done with AI assistance and it would be silly to pretend otherwise.
 I set the questions, chose the dataset, made the calls about what was worth
