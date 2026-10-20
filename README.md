@@ -79,6 +79,9 @@ The two scripts worth stealing know nothing about this study:
   different model, prompt or task framing might.
 - **`recal_curve.py`** answers "how many labelled examples would fixing it
   take?"
+- **`transfer.py`** answers "can I reuse a correction somewhere else?" It
+  fits the same correction as `recal.py` and tests it on new kinds of content
+  and on another model. On another model it made the numbers worse.
 
 Give either one a list of pairs, what your model said and what turned out to be
 true, and point it at your own data.
